@@ -5,6 +5,7 @@ import strings
 import strconv
 
 const digit_array = '0123456789abcdefghijklmnopqrstuvwxyz'.bytes()
+const digit_size = sizeof(one_int.digits[0])
 
 // big.Integer
 // -----------
@@ -39,92 +40,123 @@ fn (x Integer) clone() Integer {
 	}
 }
 
-fn int_signum(value int) int {
-	if value == 0 {
-		return 0
-	}
-	return if value < 0 { -1 } else { 1 }
-}
-
 // integer_from_int creates a new `big.Integer` from the given int value.
+[deprecated: 'use Integer.from instead']
 pub fn integer_from_int(value int) Integer {
-	if value == 0 {
-		return zero_int
-	}
-	return Integer{
-		digits: [u32(iabs(value))]
-		signum: int_signum(value)
-	}
+	return integer_from_primitive_int[int](value)
 }
 
 // integer_from_u32 creates a new `big.Integer` from the given u32 value.
+[deprecated: 'use Integer.from instead']
 pub fn integer_from_u32(value u32) Integer {
-	if value == 0 {
-		return zero_int
-	}
-	return Integer{
-		digits: [value]
-		signum: 1
-	}
+	return integer_from_primitive_int[u32](value)
 }
 
 // integer_from_i64 creates a new `big.Integer` from the given i64 value.
+[deprecated: 'use Integer.from instead']
 pub fn integer_from_i64(value i64) Integer {
-	if value == 0 {
-		return zero_int
-	}
-
-	signum_value := if value < 0 { -1 } else { 1 }
-	abs_value := u64(value * signum_value)
-
-	lower := u32(abs_value)
-	upper := u32(abs_value >> 32)
-
-	if upper == 0 {
-		return Integer{
-			digits: [lower]
-			signum: signum_value
-		}
-	} else {
-		return Integer{
-			digits: [lower, upper]
-			signum: signum_value
-		}
-	}
+	return integer_from_primitive_int[i64](value)
 }
 
 // integer_from_u64 creates a new `big.Integer` from the given u64 value.
+[deprecated: 'use Integer.from instead']
 pub fn integer_from_u64(value u64) Integer {
-	if value == 0 {
-		return zero_int
+	return integer_from_primitive_int[u64](value)
+}
+
+// integer_from_string creates a new `big.Integer` from the decimal digits specified in the given string.
+// For other bases, use `big.integer_from_radix` instead.
+[deprecated: 'use Integer.from instead']
+pub fn integer_from_string(characters string) !Integer {
+	return integer_from_radix(characters, 10)
+}
+
+// integer_from_radix creates a new `big.Integer` from the given string and radix.
+[deprecated: 'use Integer.from instead']
+pub fn integer_from_radix(all_characters string, radix u32) !Integer {
+	return Integer.from(all_characters, IntegerConfig{ radix: radix })
+}
+
+[direct_array_access]
+pub fn Integer.from[T](value T, cfg IntegerConfig) !Integer {
+	$if value is $int {
+		if value == 0 {
+			return zero_int
+		}
+	} $else $if value is string {
+		if value.len == 0 {
+			return zero_int
+		}
+	} $else $if value is $array {
+		if value.len == 0 {
+			return zero_int
+		}
+
+		if value.len == 1 {
+			return Integer.from(value[0], cfg)
+		}
 	}
 
-	lower := u32(value & 0x00000000ffffffff)
-	upper := u32((value & 0xffffffff00000000) >> 32)
+	mut result := zero_int
 
-	if upper == 0 {
-		return Integer{
-			digits: [lower]
-			signum: 1
+	$if value is $int {
+		result = integer_from_primitive_int(value)
+	} $else $if value is $array {
+		result = integer_from_array(value, cfg)
+	} $else $if value is string {
+		// could be from string or from string + radix
+		result = integer_from_string_cfg(value, cfg) or { return err }
+	} $else {
+		$for method in T.methods {
+			$if method.return_type is []u8 {
+				$if method.name == "to_bytes" {
+					result = integer_from_array[u8](value.to_bytes())
+					// a type can't have multiple methods under the same name
+				}
+			}
 		}
-	} else {
-		return Integer{
-			digits: [lower, upper]
-			signum: 1
+		// $if T.methods.len == 0 {
+			// $compile_error('math.big: Integer.from cannot convert from given type')
+		// }
+	}
+
+end:
+	if result.signum != 0 {
+		if cfg.signum == 0 {
+			return error('math.big: Non-zero value expected non-zero signum in IntegerConfig')
+		} else if cfg.signum < 0 {
+			unsafe {
+				// modify the result signum without having to make `Integer.signum` mutable,
+				// since we don't do it often
+				mutate_signum := &result.signum
+				*mutate_signum = -result.signum
+				// compiler complains about unused `mutate_signum`, this solves that
+				_ = mutate_signum
+			}
 		}
 	}
+
+	return result
+}
+
+pub enum Endianness {
+	big
+	little
 }
 
 [params]
 pub struct IntegerConfig {
 	signum int = 1
+	radix ?u32
+	infer_radix bool = true
+	endianness Endianness = .little
 }
 
 // integer_from_bytes creates a new `big.Integer` from the given byte array.
 // By default, positive integers are assumed.
 // If you want a negative integer, use in the following manner:
 // `value := big.integer_from_bytes(bytes, signum: -1)`
-[direct_array_access]
+[direct_array_access; deprecated: 'use Integer.from instead']
 pub fn integer_from_bytes(input []u8, config IntegerConfig) Integer {
 	// Thank you to Miccah (@mcastorina) for this implementation and relevant unit tests.
 	if input.len == 0 {
@@ -149,39 +181,10 @@ pub fn integer_from_bytes(input []u8, config IntegerConfig) Integer {
 	}
 }
 
-// integer_from_string creates a new `big.Integer` from the decimal digits specified in the given string.
-// For other bases, use `big.integer_from_radix` instead.
-pub fn integer_from_string(characters string) !Integer {
-	return integer_from_radix(characters, 10)
-}
-
-// integer_from_radix creates a new `big.Integer` from the given string and radix.
-pub fn integer_from_radix(all_characters string, radix u32) !Integer {
-	if radix < 2 || radix > 36 {
-		return error('Radix must be between 2 and 36 (inclusive)')
-	}
-	characters := all_characters.to_lower()
-	validate_string(characters, radix)!
-	return match radix {
-		2 {
-			integer_from_special_string(characters, 1)
-		}
-		16 {
-			integer_from_special_string(characters, 4)
-		}
-		else {
-			integer_from_regular_string(characters, radix)
-		}
-	}
-}
-
+// validate_string validates characters of a stringified Integer (without sign)
 [direct_array_access]
 fn validate_string(characters string, radix u32) ! {
-	sign_present := characters[0] == `+` || characters[0] == `-`
-
-	start_index := if sign_present { 1 } else { 0 }
-
-	for index := start_index; index < characters.len; index++ {
+	for index := 0; index < characters.len; index++ {
 		digit := characters[index]
 		value := big.digit_array.index(digit)
 
@@ -194,22 +197,14 @@ fn validate_string(characters string, radix u32) ! {
 	}
 }
 
+// integer_from_pow2_string converts a string to a big.Integer where `1 << chunk_size` is the radix
+// and `characters` is assumed to be without a sign indicator (`negative` indicates `-`)
 [direct_array_access]
-fn integer_from_special_string(characters string, chunk_size int) Integer {
-	sign_present := characters[0] == `+` || characters[0] == `-`
-
-	signum := if sign_present {
-		if characters[0] == `-` { -1 } else { 1 }
-	} else {
-		1
-	}
-
-	start_index := if sign_present { 1 } else { 0 }
-
+fn integer_from_pow2_string(characters string, negative bool, chunk_size int) Integer {
 	mut big_digits := []u32{cap: ((characters.len * chunk_size) >> 5) + 1}
 	mut current := u32(0)
 	mut offset := 0
-	for index := characters.len - 1; index >= start_index; index-- {
+	for index := characters.len - 1; index >= 0; index-- {
 		digit := characters[index]
 		value := u32(big.digit_array.index(digit))
 
@@ -232,37 +227,39 @@ fn integer_from_special_string(characters string, chunk_size int) Integer {
 
 	return Integer{
 		digits: big_digits
-		signum: if big_digits.len == 0 { 0 } else { signum }
+		signum: if big_digits.len == 0 { 0 } else { if negative { -1 } else { 1 } }
 	}
 }
 
+// integer_from_regular_string parses a string of `radix` that is not a power of 2 (else use
+// `integer_from_pow2_string`), where `negative` indicates a negative value
 [direct_array_access]
-fn integer_from_regular_string(characters string, radix u32) Integer {
-	sign_present := characters[0] == `+` || characters[0] == `-`
-
-	signum := if sign_present {
-		if characters[0] == `-` { -1 } else { 1 }
-	} else {
-		1
+fn integer_from_regular_string(characters string, negative bool, radix u32) Integer {
+	$if debug {
+		assert characters.len > 0
+		assert big.digit_array.contains(characters[0])
 	}
 
-	start_index := if sign_present { 1 } else { 0 }
+	radix_int := integer_from_primitive_int[u32](radix)
 
-	mut result := zero_int
-	radix_int := integer_from_u32(radix)
+	mut result := integer_from_primitive_int[int](big.digit_array.index(characters[0]))
 
-	for index := start_index; index < characters.len; index++ {
+	for index := 1; index < characters.len; index++ {
 		digit := characters[index]
 		value := big.digit_array.index(digit)
 
 		result *= radix_int
-		result += integer_from_int(value)
+		result += integer_from_primitive_int[int](value)
 	}
 
-	return Integer{
-		digits: result.digits.clone()
-		signum: result.signum * signum
+	if negative {
+		unsafe {
+			mutate_signum := &result.signum
+			*mutate_signum = -1
+		}
 	}
+
+	return result
 }
 
 // abs returns the absolute value of the integer.
@@ -324,7 +321,7 @@ pub fn (integer Integer) - (subtrahend Integer) Integer {
 fn (integer Integer) add(addend Integer) Integer {
 	a := integer.digits
 	b := addend.digits
-	mut storage := []u32{len: imax(a.len, b.len) + 1}
+	mut storage := []u32{len: max(a.len, b.len) + 1}
 	add_digit_array(a, b, mut storage)
 	return Integer{
 		signum: integer.signum
@@ -632,7 +629,7 @@ pub fn (mut a Integer) set_bit(i u32, value bool) {
 pub fn (a Integer) bitwise_or(b Integer) Integer {
 	check_sign(a)
 	check_sign(b)
-	mut result := []u32{len: imax(a.digits.len, b.digits.len)}
+	mut result := []u32{len: max(a.digits.len, b.digits.len)}
 	bitwise_or_digit_array(a.digits, b.digits, mut result)
 	return Integer{
 		digits: result
@@ -644,7 +641,7 @@ pub fn (a Integer) bitwise_or(b Integer) Integer {
 pub fn (a Integer) bitwise_and(b Integer) Integer {
 	check_sign(a)
 	check_sign(b)
-	mut result := []u32{len: imax(a.digits.len, b.digits.len)}
+	mut result := []u32{len: max(a.digits.len, b.digits.len)}
 	bitwise_and_digit_array(a.digits, b.digits, mut result)
 	return Integer{
 		digits: result
@@ -667,7 +664,7 @@ pub fn (a Integer) bitwise_not() Integer {
 pub fn (a Integer) bitwise_xor(b Integer) Integer {
 	check_sign(a)
 	check_sign(b)
-	mut result := []u32{len: imax(a.digits.len, b.digits.len)}
+	mut result := []u32{len: max(a.digits.len, b.digits.len)}
 	bitwise_xor_digit_array(a.digits, b.digits, mut result)
 	return Integer{
 		digits: result
@@ -790,7 +787,7 @@ pub fn (integer Integer) radix_str(radix u32) string {
 }
 
 fn (integer Integer) general_radix_str(radix u32) string {
-	divisor := integer_from_u32(radix)
+	divisor := integer_from_primitive_int[u32](radix)
 
 	mut current := integer.abs()
 	mut new_current := zero_int
@@ -960,7 +957,7 @@ pub fn (a Integer) gcd(b Integer) Integer {
 fn gcd_binary(x Integer, y Integer) Integer {
 	mut a, az := x.rsh_to_set_bit()
 	mut b, bz := y.rsh_to_set_bit()
-	shift := umin(az, bz)
+	shift := min(az, bz)
 
 	for a.signum != 0 {
 		diff := b - a

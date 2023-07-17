@@ -1,4 +1,4 @@
-import math.big
+import big
 
 struct IntegerRadix {
 	digit_string string
@@ -470,6 +470,15 @@ fn test_integer_from() {
 			} else {
 				t.value.parse().str()
 			}
+		}
+	}
+
+	// static method test
+	for t in integer_from_u64_test_data {
+		assert t.expected.trim_string_left('0x') == if t.expected.starts_with('0x') {
+			big.Integer.from(t.value).hex()
+		} else {
+			big.Integer.from(t.value).str()
 		}
 	}
 }

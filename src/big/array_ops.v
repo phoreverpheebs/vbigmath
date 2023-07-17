@@ -40,8 +40,8 @@ fn add_digit_array(operand_a []u32, operand_b []u32, mut sum []u32) {
 	}
 
 	// First pass intersects with both operands
-	smaller_limit := imin(operand_a.len, operand_b.len)
-	larger_limit := imax(operand_a.len, operand_b.len)
+	smaller_limit := min(operand_a.len, operand_b.len)
+	larger_limit := max(operand_a.len, operand_b.len)
 	mut a, mut b := if operand_a.len >= operand_b.len {
 		operand_a, operand_b
 	} else {
@@ -309,7 +309,7 @@ fn bitwise_or_digit_array(operand_a []u32, operand_b []u32, mut storage []u32) {
 
 [direct_array_access]
 fn bitwise_and_digit_array(operand_a []u32, operand_b []u32, mut storage []u32) {
-	lower := imin(operand_a.len, operand_b.len)
+	lower := min(operand_a.len, operand_b.len)
 	for index in 0 .. lower {
 		storage[index] = operand_a[index] & operand_b[index]
 	}

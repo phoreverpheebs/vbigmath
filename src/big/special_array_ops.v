@@ -28,14 +28,14 @@ fn newton_divide_array_by_array(operand_a []u32, operand_b []u32, mut quotient [
 	}
 
 	k := bit_length(a) + bit_length(b) // a*b < 2**k
-	mut x := integer_from_int(2) //  0 < x < 2**(k+1)/b  // initial guess for convergence
+	mut x := integer_from_primitive_int[int](2) //  0 < x < 2**(k+1)/b  // initial guess for convergence
 	// https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division
 	// use 48/17 - 32/17.D (divisor)
-	initial_guess := (((integer_from_int(48) - (integer_from_int(32) * b)) * integer_from_i64(0x0f0f0f0f0f0f0f0f)).rshift(64)).neg() // / 17 == 0x11
+	initial_guess := (((integer_from_primitive_int[int](48) - (integer_from_primitive_int[int](32) * b)) * integer_from_primitive_int[i64](0x0f0f0f0f0f0f0f0f)).rshift(64)).neg() // / 17 == 0x11
 	if initial_guess > zero_int {
 		x = initial_guess
 	}
-	mut lastx := integer_from_int(0)
+	mut lastx := zero_int
 	pow2_k_plus_1 := pow2(k + 1) // outside of the loop to optimize allocatio
 	for lastx != x { // main loop
 		lastx = x
@@ -112,7 +112,7 @@ fn karatsuba_multiply_digit_array(operand_a []u32, operand_b []u32, mut storage 
 	}
 
 	// thanks to the base cases we can pass zero-length arrays to the mult func
-	half := imax(operand_a.len, operand_b.len) / 2
+	half := max(operand_a.len, operand_b.len) / 2
 	a_l := operand_a[0..half]
 	a_h := operand_a[half..]
 	mut b_l := []u32{}
@@ -131,8 +131,8 @@ fn karatsuba_multiply_digit_array(operand_a []u32, operand_b []u32, mut storage 
 	mut p_3 := []u32{len: a_l.len + b_l.len + 1}
 	multiply_digit_array(a_l, b_l, mut p_3)
 
-	mut tmp_1 := []u32{len: imax(a_h.len, a_l.len) + 1}
-	mut tmp_2 := []u32{len: imax(b_h.len, b_l.len) + 1}
+	mut tmp_1 := []u32{len: max(a_h.len, a_l.len) + 1}
+	mut tmp_2 := []u32{len: max(b_h.len, b_l.len) + 1}
 	add_digit_array(a_h, a_l, mut tmp_1)
 	add_digit_array(b_h, b_l, mut tmp_2)
 
@@ -287,22 +287,22 @@ fn rshift_digits_in_place(mut a []u32, amount int) {
 fn add_in_place(mut a []u32, b []u32) {
 	len_a := a.len
 	len_b := b.len
-	max := imax(len_a, len_b)
-	min := imin(len_a, len_b)
+	max_len := max(len_a, len_b)
+	min_len := min(len_a, len_b)
 	mut carry := u64(0)
-	for index in 0 .. min {
+	for index in 0 .. min_len {
 		partial := carry + a[index] + b[index]
 		a[index] = u32(partial)
 		carry = u32(partial >> 32)
 	}
 	if len_a >= len_b {
-		for index in min .. max {
+		for index in min_len .. max_len {
 			partial := carry + a[index]
 			a[index] = u32(partial)
 			carry = u32(partial >> 32)
 		}
 	} else {
-		for index in min .. max {
+		for index in min_len .. max_len {
 			partial := carry + b[index]
 			a << u32(partial)
 			carry = u32(partial >> 32)
@@ -315,11 +315,11 @@ fn add_in_place(mut a []u32, b []u32) {
 fn subtract_in_place(mut a []u32, b []u32) {
 	len_a := a.len
 	len_b := b.len
-	max := imax(len_a, len_b)
-	min := imin(len_a, len_b)
+	max_len := max(len_a, len_b)
+	min_len := min(len_a, len_b)
 	mut carry := u32(0)
 	mut new_carry := u32(0)
-	for index in 0 .. min {
+	for index in 0 .. min_len {
 		new_carry = if a[index] < (b[index] + carry) {
 			u32(1)
 		} else {
@@ -329,7 +329,7 @@ fn subtract_in_place(mut a []u32, b []u32) {
 		carry = new_carry
 	}
 	if len_a >= len_b {
-		for index in min .. max {
+		for index in min_len .. max_len {
 			new_carry = if a[index] < carry {
 				u32(1)
 			} else {
