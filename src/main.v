@@ -208,6 +208,14 @@ const integer_from_string_test_data = [
 	IntegerFromTest{ '-325', '-325' },
 	IntegerFromTest{ '-2147483648', '-2147483648' },
 	IntegerFromTest{ '2147483647', '2147483647' },
+	IntegerFromTest{ '0x7fffffff', '2147483647' },
+	IntegerFromTest{ '0xffffffff', '4294967295' },
+	IntegerFromTest{ '0xffffffffffffffff', '18446744073709551615' }
+	IntegerFromTest{ '0b'+'1'.repeat(64), '18446744073709551615' }
+	IntegerFromTest{ '0b'+'1'.repeat(32), '4294967295'  }
+	IntegerFromTest{ '0b'+'01'.repeat(32), '6148914691236517205' }
+	IntegerFromTest{ '0o76543210', '16434824' }
+	IntegerFromTest{ '0o77', '63' }
 ]
 
 const integer_from_radix_test_data = [
